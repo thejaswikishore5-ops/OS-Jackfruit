@@ -419,7 +419,137 @@ static int run_supervisor(const char *rootfs)
      *   4) spawn the logger thread
      *   5) enter the supervisor event loop
      */
-    fprintf(stderr, "Supervisor mode not implemented yet for base-rootfs: %s\n", rootfs);
+    int sockfd;
+struct sockaddr_un addr;
+
+sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+if (sockfd < 0) {
+    perror("socket");
+    return 1;
+}
+
+memset(&addr, 0, sizeof(addr));
+addr.sun_family = AF_UNIX;
+strncpy(addr.sun_path, CONTROL_PATH, sizeof(addr.sun_path) - 1);
+
+unlink(CONTROL_PATH);
+
+if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    perror("bind");
+    return 1;
+}
+
+if (listen(sockfd, 10) < 0) {
+    perror("listen");
+    return 1;
+}
+
+printf("Supervisor running at %s\n", CONTROL_PATH);
+
+while (1) {
+    int client_fd = accept(sockfd, NULL, NULL);
+    if (client_fd < 0) continue;
+
+    control_request_t req;
+    memset(&req, 0, sizeof(req));
+
+    int n = read(client_fd, &req, sizeof(req));
+if (n <= 0) {
+    close(client_fd);
+    continue;
+}
+
+    if (req.kind == CMD_START) {
+
+    pid_t pid = fork();   // 🔥 ADD THIS
+
+    if (pid == 0) {
+        // CHILD PROCESS → run container
+
+        if (chroot(req.rootfs) != 0) {
+            perror("chroot failed");
+            exit(1);
+        }
+
+        chdir("/");
+
+        if (mount("proc", "/proc", "proc", 0, NULL) != 0) {
+            perror("mount failed");
+            exit(1);
+        }
+
+        execl(req.command, req.command, NULL);
+
+        perror("exec failed");
+        exit(1);
+    }
+
+    // PARENT (supervisor)
+    pthread_mutex_lock(&ctx.metadata_lock);
+
+    container_record_t *c = malloc(sizeof(container_record_t));
+    memset(c, 0, sizeof(*c));
+
+    strncpy(c->id, req.container_id, CONTAINER_ID_LEN);
+    c->host_pid = pid;   // ✅ NOW pid exists
+    c->state = CONTAINER_RUNNING;
+    c->started_at = time(NULL);
+
+    c->next = ctx.containers;
+    ctx.containers = c;
+
+    pthread_mutex_unlock(&ctx.metadata_lock);
+
+    char msg[128];
+    snprintf(msg, sizeof(msg), "container started with pid %d\n", pid);
+    write(client_fd, msg, strlen(msg));
+}
+
+    else if (req.kind == CMD_PS) {
+	printf("DEBUG:CMD_PS reached\n");
+        pthread_mutex_lock(&ctx.metadata_lock);
+
+        container_record_t *cur = ctx.containers;
+        while (cur) {
+            char line[128];
+            snprintf(line, sizeof(line), "%s %s\n",
+                     cur->id,
+                     state_to_string(cur->state));
+            write(client_fd, line, strlen(line));
+            cur = cur->next;
+        }
+
+        pthread_mutex_unlock(&ctx.metadata_lock);
+    }
+
+    else if (req.kind == CMD_STOP) {
+        pthread_mutex_lock(&ctx.metadata_lock);
+
+        container_record_t *cur = ctx.containers;
+       
+    while (cur) {
+        if (strcmp(cur->id, req.container_id) == 0) {
+
+            // 🔥 Kill the actual container process
+            if (kill(cur->host_pid, SIGKILL) == 0) {
+                cur->state = CONTAINER_STOPPED;
+                write(client_fd, "STOPPED\n", 8);
+            } else {
+                perror("kill failed");
+                write(client_fd, "ERROR stopping container\n", 26);
+            }
+
+            break; // stop after finding the container
+        }
+        cur = cur->next;
+    }
+
+    pthread_mutex_unlock(&ctx.metadata_lock);
+}
+            
+
+    close(client_fd);
+}
 
     bounded_buffer_begin_shutdown(&ctx.log_buffer);
     bounded_buffer_destroy(&ctx.log_buffer);
@@ -437,60 +567,101 @@ static int run_supervisor(const char *rootfs)
  */
 static int send_control_request(const control_request_t *req)
 {
-    (void)req;
-    fprintf(stderr, "Control-plane client path not implemented.\n");
-    return 1;
-}
+    int sockfd;
+    struct sockaddr_un addr;
 
+    sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("socket");
+        return 1;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, CONTROL_PATH, sizeof(addr.sun_path) - 1);
+
+    if (connect(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("connect");
+        close(sockfd);
+        return 1;
+    }
+
+    if (write(sockfd, req, sizeof(*req)) < 0) {
+        perror("write");
+        close(sockfd);
+        return 1;
+    }
+
+    // 🔥 FIX: LOOP read (this is the key)
+    char buf[512];
+    int n;
+
+    while ((n = read(sockfd, buf, sizeof(buf) - 1)) > 0) {
+        buf[n] = '\0';
+        printf("%s", buf);
+    }
+
+    close(sockfd);
+    return 0;
+}
 static int cmd_start(int argc, char *argv[])
 {
     control_request_t req;
 
     if (argc < 5) {
         fprintf(stderr,
-                "Usage: %s start <id> <container-rootfs> <command> [--soft-mib N] [--hard-mib N] [--nice N]\n",
+                "Usage: %s start <id> <rootfs> <command>\n",
                 argv[0]);
         return 1;
     }
 
     memset(&req, 0, sizeof(req));
     req.kind = CMD_START;
-    strncpy(req.container_id, argv[2], sizeof(req.container_id) - 1);
-    strncpy(req.rootfs, argv[3], sizeof(req.rootfs) - 1);
-    strncpy(req.command, argv[4], sizeof(req.command) - 1);
-    req.soft_limit_bytes = DEFAULT_SOFT_LIMIT;
-    req.hard_limit_bytes = DEFAULT_HARD_LIMIT;
 
-    if (parse_optional_flags(&req, argc, argv, 5) != 0)
-        return 1;
+    strncpy(req.container_id, argv[2], CONTAINER_ID_LEN);
+    strncpy(req.rootfs, argv[3], PATH_MAX);
+    strncpy(req.command, argv[4], CHILD_COMMAND_LEN);
 
     return send_control_request(&req);
 }
 
 static int cmd_run(int argc, char *argv[])
 {
-    control_request_t req;
-
     if (argc < 5) {
-        fprintf(stderr,
-                "Usage: %s run <id> <container-rootfs> <command> [--soft-mib N] [--hard-mib N] [--nice N]\n",
-                argv[0]);
+        printf("Usage: engine run <id> <rootfs> <command>\n");
         return 1;
     }
 
-    memset(&req, 0, sizeof(req));
-    req.kind = CMD_RUN;
-    strncpy(req.container_id, argv[2], sizeof(req.container_id) - 1);
-    strncpy(req.rootfs, argv[3], sizeof(req.rootfs) - 1);
-    strncpy(req.command, argv[4], sizeof(req.command) - 1);
-    req.soft_limit_bytes = DEFAULT_SOFT_LIMIT;
-    req.hard_limit_bytes = DEFAULT_HARD_LIMIT;
+    char *rootfs = argv[3];
+    char *cmd = argv[4];
 
-    if (parse_optional_flags(&req, argc, argv, 5) != 0)
-        return 1;
+    pid_t pid = fork();
 
-    return send_control_request(&req);
+    if (pid == 0) {
+        if (chroot(rootfs) != 0) {
+            perror("chroot failed");
+            exit(1);
+        }
+
+        chdir("/");
+	umount("/proc");
+        if (mount("proc", "/proc", "proc", 0, NULL) != 0) {
+            perror("mount failed");
+            exit(1);
+        }
+
+        execl(cmd, cmd, NULL);
+
+        perror("exec failed");
+        exit(1);
+    } else {
+        wait(NULL);
+    }
+
+    return 0;
 }
+
+
 
 static int cmd_ps(void)
 {
