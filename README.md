@@ -2,22 +2,15 @@
 
 A lightweight Linux container runtime in C with a long-running supervisor and a kernel-space memory monitor.
 
-Read [`project-guide.md`](project-guide.md) for the full project specification.
-
 ---
-
-## Getting Started
-
-### 1. Fork the Repository
-
-1. Go to [github.com/shivangjhalani/OS-Jackfruit](https://github.com/shivangjhalani/OS-Jackfruit)
-2. Click **Fork** (top-right)
-3. Clone your fork:
-
-```bash
-git clone https://github.com/<your-username>/OS-Jackfruit.git
-cd OS-Jackfruit
-```
+## 1. Team Information
+ 
+| Name | SRN |
+|------|-----|
+|  Thejaswikishore  |  PES1UG23CS655  |
+|  Vibha Vasisht  |  PES1UG24CS526  |
+ 
+---
 
 ### 2. Set Up Your VM
 
@@ -97,6 +90,49 @@ make -C boilerplate ci
 ```
 
 This smoke check does not test kernel-module loading, supervisor runtime behavior, or container execution.
+
+---
+ 
+## 3. Demo with Screenshots
+ 
+### Screenshot 1: Multi-Container Supervision
+ 
+
+ 
+---
+ 
+### Screenshot 2: Metadata Tracking
+ 
+
+---
+ 
+### Screenshot 3: Bounded-Buffer Logging
+ 
+ 
+---
+ 
+### Screenshot 4: CLI and IPC
+ 
+ 
+---
+ 
+### Screenshot 5: Soft-Limit Warning
+ 
+ 
+---
+ 
+### Screenshot 6: Hard-Limit Enforcement
+ 
+ 
+---
+ 
+### Screenshot 7: Scheduling Experiment
+ 
+ 
+---
+ 
+### Screenshot 8: Clean Teardown
+ 
 
 ---
 
