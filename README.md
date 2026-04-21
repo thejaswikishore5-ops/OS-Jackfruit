@@ -8,7 +8,7 @@ A lightweight Linux container runtime in C with a long-running supervisor and a 
 | Name | SRN |
 |------|-----|
 |  Thejaswikishore  |  PES1UG23CS655  |
-|  Vibha Vasisht  |  PES1UG24CS526  |
+|  Vinayaka Jagadish  |  PES1UG25CS855  |
  
 ---
 
