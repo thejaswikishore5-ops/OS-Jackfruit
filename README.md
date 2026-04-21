@@ -96,43 +96,43 @@ This smoke check does not test kernel-module loading, supervisor runtime behavio
 ## 3. Demo with Screenshots
  
 ### Screenshot 1: Multi-Container Supervision
- 
+ ![Multi-Container Supervision](multiplecontainers1.png)
 
  
 ---
  
 ### Screenshot 2: Metadata Tracking
- 
+ ![Metadata Tracking](metatracking.jpeg)
 
 ---
  
 ### Screenshot 3: Bounded-Buffer Logging
- 
+ ![Bounded-Buffer Logging](bounded_buffer.jpeg)
  
 ---
  
 ### Screenshot 4: CLI and IPC
- 
+ ![CLI and IPC](cli_ipc_.jpeg)
  
 ---
  
 ### Screenshot 5: Soft-Limit Warning
- 
+ ![Soft-Limit Warning](softlimiting.png)
  
 ---
  
 ### Screenshot 6: Hard-Limit Enforcement
- 
+ ![Hard-Limit Enforcement](hard_limit.jpeg)
  
 ---
  
 ### Screenshot 7: Scheduling Experiment
- 
+ ![Scheduling Experiment](scheduling_experiment.png)
  
 ---
  
 ### Screenshot 8: Clean Teardown
- 
+ ![Clean Teardown](clear_teardown_.jpeg)
 
 ---
 
